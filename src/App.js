@@ -6,6 +6,7 @@ import {
   Button,
   Flex,
   Heading,
+  Image,
   Text,
   TextField,
   View,
@@ -17,11 +18,8 @@ import {
   deleteNote as deleteNoteMutation,
 } from "./graphql/mutations";
 
-const initialFormState = { name: "", description: "" };
-
 const App = ({ signOut }) => {
   const [notes, setNotes] = useState([]);
-  const [formData, setFormData] = useState(initialFormState);
 
   useEffect(() => {
     fetchNotes();
@@ -33,8 +31,8 @@ const App = ({ signOut }) => {
     await Promise.all(
       notesFromAPI.map(async (note) => {
         if (note.image) {
-          const image = await Storage.get(note.image);
-          note.image = image;
+          const url = await Storage.get(note.image);
+          note.image = url;
         }
         return note;
       })
@@ -44,12 +42,19 @@ const App = ({ signOut }) => {
 
   async function createNote(event) {
     event.preventDefault();
-    if (!formData.name || !formData.description) return;
+    const form = new FormData(event.target);
+    const data = {
+      name: form.get("name"),
+      description: form.get("description"),
+      image: form.get("image").name || "",
+    };
+    const image = form.get("image");
+    await Storage.put(data.name, image);
     await API.graphql({
       query: createNoteMutation,
-      variables: { input: formData },
+      variables: { input: data },
     });
-    setFormData(initialFormState);
+    event.target.reset();
     fetchNotes();
   }
 
@@ -61,38 +66,33 @@ const App = ({ signOut }) => {
     fetchNotes();
   }
 
-  async function onChange(e) {
-    if (!e.target.files[0]) return;
-    const file = e.target.files[0];
-    setFormData({ ...formData, image: file.name });
-    await Storage.put(file.name, file);
-    fetchNotes();
-  }
-
   return (
-    <div className="App">
+    <View className="App">
       <Heading level={1}>My Notes App</Heading>
       <View as="form" margin="3rem 0" onSubmit={createNote}>
         <Flex direction="row" justifyContent="center">
           <TextField
+            name="name"
             placeholder="Note Name"
             label="Note Name"
             labelHidden
             variation="quiet"
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            value={formData.name}
+            required
           />
           <TextField
+            name="description"
             placeholder="Note Description"
             label="Note Description"
             labelHidden
             variation="quiet"
-            onChange={(e) =>
-              setFormData({ ...formData, description: e.target.value })
-            }
-            value={formData.description}
+            required
           />
-          <input type="file" onChange={onChange} />
+          <View
+            name="image"
+            as="input"
+            type="file"
+            style={{ alignSelf: "end" }}
+          />
           <Button type="submit" variation="primary">
             Create Note
           </Button>
@@ -112,7 +112,7 @@ const App = ({ signOut }) => {
             </Text>
             <Text as="span">{note.description}</Text>
             {note.image && (
-              <img
+              <Image
                 src={note.image}
                 alt={`visual aid for ${notes.name}`}
                 style={{ width: 400 }}
@@ -125,7 +125,7 @@ const App = ({ signOut }) => {
         ))}
       </View>
       <Button onClick={signOut}>Sign Out</Button>
-    </div>
+    </View>
   );
 };
 
